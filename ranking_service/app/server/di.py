@@ -15,7 +15,10 @@ class InfraProvider(dishka.Provider):
     subconfigs = dishka.provide_all(*infra.GlobalConfig.subconfigs())
     async_engine = dishka.provide(staticmethod(infra.provide_async_engine))
     async_session_factory = dishka.provide(staticmethod(infra.provide_async_session_factory))
+    async_engine_replica = dishka.provide(staticmethod(infra.provide_async_engine_replica))
+    async_session_factory_replica = dishka.provide(staticmethod(infra.provide_async_session_factory_replica))
     valkey = dishka.provide(staticmethod(infra.provide_valkey_client))
+    valkey_rankings = dishka.provide(staticmethod(infra.provide_valkey_client_rankings))
 
 
 @final
@@ -23,11 +26,18 @@ class AdapterProvider(dishka.Provider):
     scope = dishka.Scope.APP
 
     @dishka.provide
-    def provide_rating_repository(
+    def provide_rating_repository_primary(
         self,
         session_factory: infra.AsyncSessionFactory,
     ) -> protocols.RatingRepositoryProtocol:
         return adapters.PostgresRatingRepositoryAdapter(session_factory=session_factory)
+
+    @dishka.provide
+    def provide_rating_repository_replica(
+        self,
+        session_factory_replica: infra.AsyncSessionFactory,
+    ) -> protocols.RatingRepositoryProtocol:
+        return adapters.PostgresRatingRepositoryAdapter(session_factory=session_factory_replica)
 
     @dishka.provide
     def provide_interaction_staging_repository(
@@ -37,8 +47,8 @@ class AdapterProvider(dishka.Provider):
         return adapters.PostgresInteractionStagingRepositoryAdapter(session_factory=session_factory)
 
     @dishka.provide
-    def provide_ranked_queue(self, valkey: infra.ValkeyClient) -> protocols.RankedQueueProtocol:
-        return adapters.ValkeyRankedQueueAdapter(valkey=valkey)
+    def provide_ranked_queue(self, valkey_rankings: infra.ValkeyClient) -> protocols.RankedQueueProtocol:
+        return adapters.ValkeyRankedQueueAdapter(valkey=valkey_rankings)
 
 
 @final
@@ -76,9 +86,11 @@ class AppProvider(dishka.Provider):
     def provide_ranking_service_handler(
         self,
         ranked_queue: protocols.RankedQueueProtocol,
+        calc_behavioral_score: usecases.CalcBehavioralScore,
     ) -> grpc_handler.RankingServiceHandler:
         return grpc_handler.RankingServiceHandler(
             _ranked_queue=ranked_queue,
+            _calc_behavioral_score=calc_behavioral_score,
         )
 
 

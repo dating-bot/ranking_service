@@ -28,7 +28,7 @@ async def _prefetch_for_viewer(viewer_id: int, limit: int = 10) -> int:
         async with rating_repo.context() as session:
             candidates = await rating_repo.list_top_candidates(session, limit=limit)
 
-        valkey_client = ValkeyClient(config.valkey)
+        valkey_client = ValkeyClient(config.valkey, db=config.valkey.db_rankings)
         await valkey_client.initialize()
         try:
             await valkey_client.client.delete(queue_key)

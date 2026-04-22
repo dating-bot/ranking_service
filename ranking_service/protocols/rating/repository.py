@@ -1,6 +1,7 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Protocol
 
 from ranking_service.domain.ratings import BehavioralRating, CombinedRating, PrimaryRating, RankedCandidate
@@ -25,6 +26,9 @@ class RatingRepositoryProtocol[SessionT](Protocol):
         rank_percentile: float
         latitude: float | None = None
         longitude: float | None = None
+        age: int | None = None
+        gender: str | None = None
+        boost_expires_at: datetime | None = None
 
     @dataclass
     class UpsertBehavioralRatingRequest:
@@ -62,8 +66,12 @@ class RatingRepositoryProtocol[SessionT](Protocol):
         self,
         session: SessionT,
         *,
+        viewer_id: int,
         user_lat: float,
         user_lon: float,
+        gender_pref: str,
+        age_min: int,
+        age_max: int,
         radius_km: float = 50.0,
         limit: int = 100,
         exclude_ids: list[int] | None = None,

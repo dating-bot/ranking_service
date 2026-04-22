@@ -4,7 +4,8 @@ from typing import ClassVar, override
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict, TomlConfigSettingsSource
 
 from ranking_service.infra.grpc import GrpcServerConfig
-from ranking_service.infra.postgres import PostgresConfig
+from ranking_service.infra.postgres import PostgresConfig, PostgresReplicaConfig
+from ranking_service.infra.profile_service import ProfileServiceConfig
 from ranking_service.infra.valkey import ValkeyConfig
 
 
@@ -12,8 +13,10 @@ class GlobalConfig(BaseSettings):
     debug: bool = False
 
     postgres: PostgresConfig
+    postgres_replica: PostgresReplicaConfig
     grpc_server: GrpcServerConfig
     valkey: ValkeyConfig
+    profile_service: ProfileServiceConfig
 
     @classmethod
     def load(cls) -> "GlobalConfig":

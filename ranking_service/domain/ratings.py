@@ -14,6 +14,11 @@ class PrimaryRating(pydantic.BaseModel):
     telegram_id: int = pydantic.Field(description="Telegram user ID")
     score: float = pydantic.Field(description="Primary rating score (0-100)")
     rank_percentile: float = pydantic.Field(description="Rank percentile (0-100)")
+    gender: str | None = pydantic.Field(default=None, description="Gender")
+    age: int | None = pydantic.Field(default=None, description="Age")
+    latitude: float | None = pydantic.Field(default=None, description="Latitude")
+    longitude: float | None = pydantic.Field(default=None, description="Longitude")
+    boost_expires_at: datetime | None = pydantic.Field(default=None, description="Boost expiration")
     updated_at: datetime = pydantic.Field(
         default_factory=lambda: datetime.now(tz=UTC),
         description="Last update timestamp",

@@ -1,0 +1,51 @@
+services:
+  ranking_server:
+    build: .
+    container_name: ranking_service
+    ports:
+      - "50053:50051"
+    volumes:
+      - ./config.docker.toml:/app/config.toml:ro
+    networks:
+      - dating_bot_net
+    depends_on:
+      ranking_postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=:50051"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  ranking_postgres:
+    image: ankane/pgvector:pg16
+    environment:
+      POSTGRES_USER: ranking
+      POSTGRES_PASSWORD: ranking
+      POSTGRES_DB: ranking
+    volumes:
+      - ranking_pgdata:/var/lib/postgresql/data
+    networks:
+      - dating_bot_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ranking"]
+      interval: 5s
+      timeout: 3s
+
+  ranking_celery:
+    build: .
+    container_name: ranking_celery
+    command: celery -A ranking_service.app.celery worker --loglevel=info
+    volumes:
+      - ./config.docker.toml:/app/config.toml:ro
+    networks:
+      - dating_bot_net
+    depends_on:
+      - ranking_postgres
+
+networks:
+  dating_bot_net:
+    external: true
+
+volumes:
+  ranking_pgdata:

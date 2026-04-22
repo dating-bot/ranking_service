@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 from typing import final
 
 import structlog
@@ -32,6 +33,9 @@ class CalcPrimaryScore[SessionT]:
         ai_quality: float
         latitude: float | None = None
         longitude: float | None = None
+        age: int | None = None
+        gender: str | None = None
+        boost_expires_at: datetime | None = None
 
     @dataclass
     class Response:
@@ -62,6 +66,9 @@ class CalcPrimaryScore[SessionT]:
                     rank_percentile=0.0,
                     latitude=request.latitude,
                     longitude=request.longitude,
+                    age=request.age,
+                    gender=request.gender,
+                    boost_expires_at=request.boost_expires_at,
                 ),
             )
 

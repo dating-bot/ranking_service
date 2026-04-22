@@ -25,8 +25,11 @@ class PrimaryRatingORM(Base):
     telegram_id: Mapped[int] = mapped_column(sa.BigInteger(), unique=True, nullable=False)
     score: Mapped[float] = mapped_column(sa.Float(), nullable=False)
     rank_percentile: Mapped[float] = mapped_column(sa.Float(), nullable=False)
+    gender: Mapped[str | None] = mapped_column(sa.String(16), nullable=True)
+    age: Mapped[int | None] = mapped_column(sa.SmallInteger(), nullable=True)
     latitude: Mapped[float | None] = mapped_column(sa.Float(), nullable=True)
     longitude: Mapped[float | None] = mapped_column(sa.Float(), nullable=True)
+    boost_expires_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True),
         nullable=False,
@@ -45,6 +48,11 @@ class PrimaryRatingORM(Base):
             telegram_id=self.telegram_id,
             score=self.score,
             rank_percentile=self.rank_percentile,
+            gender=self.gender,
+            age=self.age,
+            latitude=self.latitude,
+            longitude=self.longitude,
+            boost_expires_at=self.boost_expires_at,
             updated_at=self.updated_at,
         )
 
