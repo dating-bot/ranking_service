@@ -287,3 +287,31 @@ class PostgresRatingRepositoryAdapter(RatingRepositoryProtocol[AsyncSession]):
                 )
             )
         return candidates
+
+    @override
+    async def list_profiles_for_shard(
+        self, session: AsyncSession, *, shard: int, total_shards: int
+    ) -> list[RatingRepositoryProtocol.ProfileRatingData]:
+        query = (
+            sa
+            .select(
+                PrimaryRatingORM.telegram_id,
+                PrimaryRatingORM.score.label("primary_score"),
+                sa.coalesce(BehavioralRatingORM.engagement_score, 0.0).label("behavioral_score"),
+            )
+            .outerjoin(
+                BehavioralRatingORM,
+                PrimaryRatingORM.telegram_id == BehavioralRatingORM.telegram_id,
+            )
+            .where(PrimaryRatingORM.telegram_id % total_shards == shard)
+        )
+
+        result = await session.execute(query)
+        return [
+            RatingRepositoryProtocol.ProfileRatingData(
+                telegram_id=row.telegram_id,
+                primary_score=row.primary_score,
+                behavioral_score=row.behavioral_score,
+            )
+            for row in result.all()
+        ]

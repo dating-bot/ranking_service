@@ -69,6 +69,16 @@ class RatingRepositoryProtocol[SessionT](Protocol):
         exclude_ids: list[int] | None = None,
     ) -> list[RankedCandidate]: ...
 
+    @dataclass
+    class ProfileRatingData:
+        telegram_id: int
+        primary_score: float
+        behavioral_score: float
+
+    async def list_profiles_for_shard(
+        self, session: SessionT, *, shard: int, total_shards: int
+    ) -> list["RatingRepositoryProtocol.ProfileRatingData"]: ...
+
 
 class RankedQueueProtocol(Protocol):
     async def lpush_candidate(self, candidate: RankedCandidate) -> None: ...

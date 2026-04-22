@@ -62,5 +62,14 @@ class AppProvider(dishka.Provider):
             rating_repository=rating_repository,
         )
 
+    @dishka.provide
+    def provide_calc_combined_score(
+        self,
+        rating_repository: protocols.RatingRepositoryProtocol[AsyncSession],
+    ) -> usecases.CalcCombinedScore[AsyncSession]:
+        return usecases.CalcCombinedScore[AsyncSession](
+            rating_repository=rating_repository,
+        )
+
 
 container = dishka.make_async_container(InfraProvider(), AdapterProvider(), AppProvider())
