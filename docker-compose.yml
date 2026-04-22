@@ -18,7 +18,7 @@ services:
       retries: 3
 
   ranking_postgres:
-    image: ankane/pgvector:pg16
+    image: ankane/pgvector:latest
     environment:
       POSTGRES_USER: ranking
       POSTGRES_PASSWORD: ranking
