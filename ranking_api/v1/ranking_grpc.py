@@ -4,39 +4,33 @@
 import abc
 import typing
 
-import grpclib.client
 import grpclib.const
-
+import grpclib.client
 if typing.TYPE_CHECKING:
     import grpclib.server
 
-import api.ranking_api.v1.ranking_pb2 as ranking_pb2
+import ranking_api.v1.ranking_pb2
 
 
 class RankingServiceBase(abc.ABC):
+
     @abc.abstractmethod
-    async def GetNextCandidate(
-        self,
-        stream: "grpclib.server.Stream[ranking_api.v1.ranking_pb2.GetNextCandidateRequest, ranking_api.v1.ranking_pb2.GetNextCandidateResponse]",
-    ) -> None:
+    async def GetNextCandidate(self, stream: 'grpclib.server.Stream[ranking_api.v1.ranking_pb2.GetNextCandidateRequest, ranking_api.v1.ranking_pb2.GetNextCandidateResponse]') -> None:
         pass
 
     @abc.abstractmethod
-    async def UpdateEngagement(
-        self,
-        stream: "grpclib.server.Stream[ranking_api.v1.ranking_pb2.UpdateEngagementRequest, ranking_api.v1.ranking_pb2.UpdateEngagementResponse]",
-    ) -> None:
+    async def UpdateEngagement(self, stream: 'grpclib.server.Stream[ranking_api.v1.ranking_pb2.UpdateEngagementRequest, ranking_api.v1.ranking_pb2.UpdateEngagementResponse]') -> None:
         pass
 
     def __mapping__(self) -> typing.Dict[str, grpclib.const.Handler]:
         return {
-            "/ranking_api.v1.RankingService/GetNextCandidate": grpclib.const.Handler(
+            '/ranking_api.v1.RankingService/GetNextCandidate': grpclib.const.Handler(
                 self.GetNextCandidate,
                 grpclib.const.Cardinality.UNARY_UNARY,
                 ranking_api.v1.ranking_pb2.GetNextCandidateRequest,
                 ranking_api.v1.ranking_pb2.GetNextCandidateResponse,
             ),
-            "/ranking_api.v1.RankingService/UpdateEngagement": grpclib.const.Handler(
+            '/ranking_api.v1.RankingService/UpdateEngagement': grpclib.const.Handler(
                 self.UpdateEngagement,
                 grpclib.const.Cardinality.UNARY_UNARY,
                 ranking_api.v1.ranking_pb2.UpdateEngagementRequest,
@@ -46,16 +40,17 @@ class RankingServiceBase(abc.ABC):
 
 
 class RankingServiceStub:
+
     def __init__(self, channel: grpclib.client.Channel) -> None:
         self.GetNextCandidate = grpclib.client.UnaryUnaryMethod(
             channel,
-            "/ranking_api.v1.RankingService/GetNextCandidate",
+            '/ranking_api.v1.RankingService/GetNextCandidate',
             ranking_api.v1.ranking_pb2.GetNextCandidateRequest,
             ranking_api.v1.ranking_pb2.GetNextCandidateResponse,
         )
         self.UpdateEngagement = grpclib.client.UnaryUnaryMethod(
             channel,
-            "/ranking_api.v1.RankingService/UpdateEngagement",
+            '/ranking_api.v1.RankingService/UpdateEngagement',
             ranking_api.v1.ranking_pb2.UpdateEngagementRequest,
             ranking_api.v1.ranking_pb2.UpdateEngagementResponse,
         )

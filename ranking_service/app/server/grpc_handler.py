@@ -5,8 +5,8 @@ import structlog
 from grpclib import Status
 from grpclib.exceptions import GRPCError
 
-from api.ranking_api.v1 import ranking_pb2
-from api.ranking_api.v1.ranking_grpc import RankingServiceBase
+from ranking_api.v1 import ranking_pb2
+from ranking_api.v1.ranking_grpc import RankingServiceBase
 from ranking_service.app.server.utils.unary import unary
 from ranking_service.app.tasks.prefetch_ranked_queue import prefetch_ranked_queue
 from ranking_service.protocols.rating.repository import RankedQueueProtocol
@@ -91,7 +91,7 @@ class RankingServiceHandler(RankingServiceBase):
                             avg_response_time_seconds=300.0,
                         )
                     )
-                except Exception as e:
+                except Exception:
                     log.exception("failed to update engagement", user_id=user_id)
                     return ranking_pb2.UpdateEngagementResponse(success=False)
             log.info(

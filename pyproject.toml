@@ -71,15 +71,15 @@ reportMissingImports = "error"
 reportMissingTypeStubs = false
 reportUnknownMemberType = false
 reportUnusedParameter = "warning"
-exclude = ["**/.venv", "**/__pycache__", "alembic", "ranking_service/tests"]
+exclude = ["**/.venv", "**/__pycache__", "ranking_api", "external_clients", "alembic", "ranking_service/tests", "scripts"]
 typeCheckingMode = "recommended"
 
 [tool.mypy]
-exclude = [".*_test.py"]
+exclude = [".*_test.py", "ranking_api", "external_clients", "scripts"]
 plugins = "pydantic.mypy"
 
 [tool.ruff]
-exclude = [".venv"]
+exclude = [".venv", "ranking_api", "external_clients", "scripts"]
 force-exclude = true
 line-length = 120
 indent-width = 4
@@ -101,6 +101,9 @@ unfixable = []
 "ranking_service/tests/**/*" = ["S101"]
 "*_test.py" = ["ANN", "S", "S101", "TRY", "PGH003", "FBT", "PT012", "N801", "ARG002", "SLF001", "PLR", "SIM"]
 "alembic/*" = ["INP001"]
+"ranking_api/**" = ["ERA001", "E501", "SLF001", "TC004", "N802"]
+"external_clients/**" = ["ERA001", "E501", "SLF001", "TC004", "N802"]
+"api/**" = ["ERA001", "E501", "SLF001", "TC004", "N802"]
 
 [tool.ruff.lint.flake8-bandit]
 check-typed-exception = true
@@ -112,10 +115,10 @@ ban-relative-imports = "all"
 max-line-length = 128
 
 [tool.coverage.run]
-omit = []
+omit = ["ranking_api", "external_clients"]
 
 [tool.coverage.report]
-omit = []
+omit = ["ranking_api", "external_clients"]
 
 [tool.pytest.ini_options]
 pythonpath = "."
