@@ -28,7 +28,7 @@ async def _process_shard(shard: int, total_shards: int) -> int:
 
         for profile in profiles:
             try:
-                await calc_combined.execute(
+                _ = await calc_combined.execute(
                     CalcCombinedScore.Request(
                         telegram_id=profile.telegram_id,
                         primary_score=profile.primary_score,

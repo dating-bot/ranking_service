@@ -70,3 +70,23 @@ class ValkeyRankedQueueAdapter(RankedQueueProtocol):
     @override
     async def clear_queue(self) -> None:
         await self._valkey.client.delete(RANKED_QUEUE_KEY)
+
+    def _viewer_queue_key(self, viewer_id: int) -> str:
+        return f"{RANKED_QUEUE_KEY}:{viewer_id}"
+
+    @override
+    async def get_viewer_queue_len(self, viewer_id: int) -> int:
+        return await self._valkey.client.llen(self._viewer_queue_key(viewer_id))
+
+    @override
+    async def lpop_viewer_candidate(self, viewer_id: int) -> RankedCandidate | None:
+        data = await self._valkey.client.lpop(self._viewer_queue_key(viewer_id))
+        if data is None:
+            return None
+        parsed = json.loads(data)
+        return RankedCandidate(
+            telegram_id=parsed["telegram_id"],
+            combined_score=parsed["combined_score"],
+            rank=parsed["rank"],
+            reason=parsed["reason"],
+        )

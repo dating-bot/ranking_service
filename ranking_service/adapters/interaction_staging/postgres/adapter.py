@@ -2,8 +2,10 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import final, override
 
+import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ranking_service.adapters.postgres_models.models import InteractionStagingORM
 from ranking_service.domain import InteractionStaging
 from ranking_service.infra.postgres import AsyncSessionFactory
 from ranking_service.protocols.interaction_staging.repository import InteractionStagingRepositoryProtocol
@@ -27,7 +29,28 @@ class PostgresInteractionStagingRepositoryAdapter(InteractionStagingRepositoryPr
         finally:
             await session.close()
 
+    @override
     async def insert_staging(
         self, session: AsyncSession, request: InteractionStagingRepositoryProtocol.InsertStagingRequest
     ) -> InteractionStaging:
-        raise NotImplementedError
+        result = await session.execute(
+            sa
+            .insert(InteractionStagingORM)
+            .values(
+                actor_telegram_id=request.actor_telegram_id,
+                target_telegram_id=request.target_telegram_id,
+            )
+            .returning(
+                InteractionStagingORM.id,
+                InteractionStagingORM.actor_telegram_id,
+                InteractionStagingORM.target_telegram_id,
+                InteractionStagingORM.created_at,
+            )
+        )
+        row = result.mappings().one()
+        return InteractionStaging(
+            id=row["id"],
+            actor_telegram_id=row["actor_telegram_id"],
+            target_telegram_id=row["target_telegram_id"],
+            created_at=row["created_at"],
+        )

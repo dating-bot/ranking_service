@@ -1,0 +1,15 @@
+syntax = "proto3";
+package ranking_api.v1;
+
+service RankingService {
+  rpc GetNextCandidate(GetNextCandidateRequest) returns (GetNextCandidateResponse);
+}
+
+message GetNextCandidateRequest {
+  int64 viewer_id = 1;
+}
+
+message GetNextCandidateResponse {
+  int64 profile_id = 1;
+  int64 queue_len = 2;
+}

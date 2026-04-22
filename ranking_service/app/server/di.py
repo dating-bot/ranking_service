@@ -4,6 +4,7 @@ import dishka
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ranking_service import adapters, infra, protocols, usecases
+from ranking_service.app.server import grpc_handler
 
 
 @final
@@ -69,6 +70,15 @@ class AppProvider(dishka.Provider):
     ) -> usecases.CalcCombinedScore[AsyncSession]:
         return usecases.CalcCombinedScore[AsyncSession](
             rating_repository=rating_repository,
+        )
+
+    @dishka.provide
+    def provide_ranking_service_handler(
+        self,
+        ranked_queue: protocols.RankedQueueProtocol,
+    ) -> grpc_handler.RankingServiceHandler:
+        return grpc_handler.RankingServiceHandler(
+            _ranked_queue=ranked_queue,
         )
 
 
