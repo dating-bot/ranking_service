@@ -23,7 +23,7 @@ class ValkeyRankedQueueAdapter(RankedQueueProtocol):
             "rank": candidate.rank,
             "reason": candidate.reason,
         })
-        await self._valkey.client.lpush(RANKED_QUEUE_KEY, data)
+        _ = await self._valkey.client.lpush(RANKED_QUEUE_KEY, data)
         await self._valkey.client.expire(RANKED_QUEUE_KEY, self._ttl)
 
     @override
@@ -34,7 +34,7 @@ class ValkeyRankedQueueAdapter(RankedQueueProtocol):
             "rank": candidate.rank,
             "reason": candidate.reason,
         })
-        await self._valkey.client.rpush(RANKED_QUEUE_KEY, data)
+        _ = await self._valkey.client.rpush(RANKED_QUEUE_KEY, data)
         await self._valkey.client.expire(RANKED_QUEUE_KEY, self._ttl)
 
     @override

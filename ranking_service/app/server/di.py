@@ -1,8 +1,9 @@
 from typing import final
 
 import dishka
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from ranking_service import adapters, infra, protocols
+from ranking_service import adapters, infra, protocols, usecases
 
 
 @final
@@ -42,6 +43,24 @@ class AdapterProvider(dishka.Provider):
 @final
 class AppProvider(dishka.Provider):
     scope = dishka.Scope.APP
+
+    @dishka.provide
+    def provide_calc_primary_score(
+        self,
+        rating_repository: protocols.RatingRepositoryProtocol[AsyncSession],
+    ) -> usecases.CalcPrimaryScore[AsyncSession]:
+        return usecases.CalcPrimaryScore[AsyncSession](
+            rating_repository=rating_repository,
+        )
+
+    @dishka.provide
+    def provide_calc_behavioral_score(
+        self,
+        rating_repository: protocols.RatingRepositoryProtocol[AsyncSession],
+    ) -> usecases.CalcBehavioralScore[AsyncSession]:
+        return usecases.CalcBehavioralScore[AsyncSession](
+            rating_repository=rating_repository,
+        )
 
 
 container = dishka.make_async_container(InfraProvider(), AdapterProvider(), AppProvider())
