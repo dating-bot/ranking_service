@@ -20,14 +20,23 @@ class InfraProvider(dishka.Provider):
 class AdapterProvider(dishka.Provider):
     scope = dishka.Scope.APP
 
-    rating_repository = dishka.provide(
-        source=adapters.PostgresRatingRepositoryAdapter,
-        provides=protocols.RatingRepositoryProtocol,
-    )
-    interaction_staging_repository = dishka.provide(
-        source=adapters.PostgresInteractionStagingRepositoryAdapter,
-        provides=protocols.InteractionStagingRepositoryProtocol,
-    )
+    @dishka.provide
+    def provide_rating_repository(
+        self,
+        session_factory: infra.AsyncSessionFactory,
+    ) -> protocols.RatingRepositoryProtocol:
+        return adapters.PostgresRatingRepositoryAdapter(session_factory=session_factory)
+
+    @dishka.provide
+    def provide_interaction_staging_repository(
+        self,
+        session_factory: infra.AsyncSessionFactory,
+    ) -> protocols.InteractionStagingRepositoryProtocol:
+        return adapters.PostgresInteractionStagingRepositoryAdapter(session_factory=session_factory)
+
+    @dishka.provide
+    def provide_ranked_queue(self, valkey: infra.ValkeyClient) -> protocols.RankedQueueProtocol:
+        return adapters.ValkeyRankedQueueAdapter(valkey=valkey)
 
 
 @final

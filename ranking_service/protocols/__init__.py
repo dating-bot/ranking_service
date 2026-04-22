@@ -1,0 +1,5 @@
+from ranking_service.protocols.interaction_staging.repository import (
+    InteractionStagingRepositoryProtocol as InteractionStagingRepositoryProtocol,
+)
+from ranking_service.protocols.rating.repository import RankedQueueProtocol as RankedQueueProtocol
+from ranking_service.protocols.rating.repository import RatingRepositoryProtocol as RatingRepositoryProtocol

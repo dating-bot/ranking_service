@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Protocol
 
-from ranking_service.domain.ratings import CombinedRating, PrimaryRating, RankedCandidate
+from ranking_service.domain.ratings import BehavioralRating, CombinedRating, PrimaryRating, RankedCandidate
 
 
 class RatingRepositoryProtocol[SessionT](Protocol):
@@ -18,9 +18,20 @@ class RatingRepositoryProtocol[SessionT](Protocol):
         score: float
         rank_percentile: float
 
-    async def insert_primary_rating(
-        self, session: SessionT, request: InsertPrimaryRatingRequest
-    ) -> PrimaryRating: ...
+    @dataclass
+    class UpsertPrimaryRatingRequest:
+        telegram_id: int
+        score: float
+        rank_percentile: float
+        latitude: float | None = None
+        longitude: float | None = None
+
+    @dataclass
+    class UpsertBehavioralRatingRequest:
+        telegram_id: int
+        engagement_score: float
+        response_rate: float
+        avg_response_time_seconds: float
 
     @dataclass
     class UpsertCombinedRatingRequest:
@@ -28,6 +39,14 @@ class RatingRepositoryProtocol[SessionT](Protocol):
         primary_score: float
         behavioral_score: float
         combined_score: float
+
+    async def insert_primary_rating(self, session: SessionT, request: InsertPrimaryRatingRequest) -> PrimaryRating: ...
+
+    async def upsert_primary(self, session: SessionT, request: UpsertPrimaryRatingRequest) -> PrimaryRating: ...
+
+    async def upsert_behavioral(
+        self, session: SessionT, request: UpsertBehavioralRatingRequest
+    ) -> BehavioralRating: ...
 
     async def upsert_combined_rating(
         self, session: SessionT, request: UpsertCombinedRatingRequest
@@ -39,14 +58,22 @@ class RatingRepositoryProtocol[SessionT](Protocol):
         self, session: SessionT, *, limit: int = 100, exclude_ids: list[int] | None = None
     ) -> list[RankedCandidate]: ...
 
+    async def get_ranked_candidates(  # noqa: PLR0913
+        self,
+        session: SessionT,
+        *,
+        user_lat: float,
+        user_lon: float,
+        radius_km: float = 50.0,
+        limit: int = 100,
+        exclude_ids: list[int] | None = None,
+    ) -> list[RankedCandidate]: ...
+
 
 class RankedQueueProtocol(Protocol):
-    async def push_candidate(self, candidate: RankedCandidate) -> None: ...
-
-    async def pop_candidate(self) -> RankedCandidate | None: ...
-
-    async def peek(self, *, count: int) -> list[RankedCandidate]: ...
-
-    async def size(self) -> int: ...
-
-    async def clear(self) -> None: ...
+    async def lpush_candidate(self, candidate: RankedCandidate) -> None: ...
+    async def rpush_candidate(self, candidate: RankedCandidate) -> None: ...
+    async def lpop_candidate(self) -> RankedCandidate | None: ...
+    async def queue_len(self) -> int: ...
+    async def lrange_candidates(self, start: int, end: int) -> list[RankedCandidate]: ...
+    async def clear_queue(self) -> None: ...

@@ -25,6 +25,8 @@ class PrimaryRatingORM(Base):
     telegram_id: Mapped[int] = mapped_column(sa.BigInteger(), unique=True, nullable=False)
     score: Mapped[float] = mapped_column(sa.Float(), nullable=False)
     rank_percentile: Mapped[float] = mapped_column(sa.Float(), nullable=False)
+    latitude: Mapped[float | None] = mapped_column(sa.Float(), nullable=True)
+    longitude: Mapped[float | None] = mapped_column(sa.Float(), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True),
         nullable=False,
@@ -32,7 +34,10 @@ class PrimaryRatingORM(Base):
         default=lambda: datetime.now(UTC),
     )
 
-    __table_args__: tuple[sa.Index] = (sa.Index("ix_primary_ratings_telegram_id", "telegram_id"),)
+    __table_args__: tuple[sa.Index] = (
+        sa.Index("ix_primary_ratings_telegram_id", "telegram_id"),
+        sa.Index("ix_primary_ratings_location", "latitude", "longitude"),
+    )
 
     def to_domain(self) -> PrimaryRating:
         return PrimaryRating(
