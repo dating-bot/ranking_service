@@ -1,0 +1,20 @@
+debug = false
+
+[grpc_server]
+host = "0.0.0.0"
+port = 50053
+
+[postgres]
+host = "localhost"
+port = 5434
+username = "postgres"
+password = "postgres"
+database = "ranking_service"
+should_log_sql = false
+pool_size = 10
+pool_max_overflow = 20
+
+[valkey]
+host = "localhost"
+port = 6379
+db = 0

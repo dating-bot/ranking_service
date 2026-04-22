@@ -1,0 +1,1 @@
+from ranking_service.protocols.rating.repository import RankedQueueProtocol, RatingRepositoryProtocol
