@@ -68,8 +68,8 @@ class AppProvider(dishka.Provider):
     def provide_calc_behavioral_score(
         self,
         rating_repository: protocols.RatingRepositoryProtocol[AsyncSession],
-    ) -> usecases.CalcBehavioralScore[AsyncSession]:
-        return usecases.CalcBehavioralScore[AsyncSession](
+    ) -> usecases.CalcBehavioralScore:
+        return usecases.CalcBehavioralScore(
             rating_repository=rating_repository,
         )
 

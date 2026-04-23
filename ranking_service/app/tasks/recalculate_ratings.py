@@ -1,7 +1,7 @@
 import asyncio
 
 import structlog
-from celery import Group, shared_task
+from celery import group, shared_task
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from ranking_service.adapters.rating.postgres.adapter import PostgresRatingRepositoryAdapter
@@ -63,6 +63,6 @@ def recalculate_ratings(shard: int, total: int = DEFAULT_TOTAL_SHARDS) -> dict[s
 def recalculate_ratings_batch() -> dict[str, object]:
     total_shards = DEFAULT_TOTAL_SHARDS
     group_tasks = [recalculate_ratings.s(shard=i, total=total_shards) for i in range(total_shards)]
-    result = Group(group_tasks).apply_async()
+    result = group(group_tasks).apply_async()
     log.info("recalculate_ratings_batch dispatched", total_shards=total_shards)
     return {"total_shards": total_shards, "group_id": str(result.id)}

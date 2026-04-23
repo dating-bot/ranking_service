@@ -2,6 +2,7 @@ services:
   ranking_server:
     build: .
     container_name: ranking_service
+    command: ["uv", "-q", "run", "python3", "-m", "ranking_service.app.server"]
     ports:
       - "50053:50051"
     volumes:
@@ -35,17 +36,21 @@ services:
   ranking_celery:
     build: .
     container_name: ranking_celery
-    command: celery -A ranking_service.app.celery worker --loglevel=info
+    command: ["uv", "run", "celery", "-A", "ranking_service.app.celery", "worker", "--loglevel=info"]
     volumes:
       - ./config.docker.toml:/app/config.toml:ro
     networks:
       - dating_bot_net
     depends_on:
       - ranking_postgres
+    restart: unless-stopped
+    environment:
+      - CELERY_BROKER_URL=redis://valkey:6379/0
 
 networks:
   dating_bot_net:
     external: true
+    name: dating_bot_net
 
 volumes:
   ranking_pgdata:
