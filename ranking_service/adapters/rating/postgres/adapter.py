@@ -129,8 +129,7 @@ class PostgresRatingRepositoryAdapter(RatingRepositoryProtocol[AsyncSession]):
         self, session: AsyncSession, request: RatingRepositoryProtocol.UpsertBehavioralRatingRequest
     ) -> BehavioralRating:
         result = await session.execute(
-            sa
-            .insert(BehavioralRatingORM)
+            pg_insert(BehavioralRatingORM)
             .values(
                 telegram_id=request.telegram_id,
                 engagement_score=request.engagement_score,
@@ -166,12 +165,21 @@ class PostgresRatingRepositoryAdapter(RatingRepositoryProtocol[AsyncSession]):
         )
 
     @override
+    async def get_behavioral_rating(self, session: AsyncSession, telegram_id: int) -> BehavioralRating | None:
+        result = await session.execute(
+            sa.select(BehavioralRatingORM).where(BehavioralRatingORM.telegram_id == telegram_id)
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            return None
+        return row.to_domain()
+
+    @override
     async def upsert_combined_rating(
         self, session: AsyncSession, request: RatingRepositoryProtocol.UpsertCombinedRatingRequest
     ) -> CombinedRating:
         result = await session.execute(
-            sa
-            .insert(CombinedRatingORM)
+            pg_insert(CombinedRatingORM)
             .values(
                 telegram_id=request.telegram_id,
                 primary_score=request.primary_score,
@@ -256,7 +264,7 @@ class PostgresRatingRepositoryAdapter(RatingRepositoryProtocol[AsyncSession]):
         viewer_id: int,
         user_lat: float,
         user_lon: float,
-        gender_pref: str,
+        gender_pref: str | None,
         age_min: int,
         age_max: int,
         radius_km: float = 50.0,
@@ -267,7 +275,7 @@ class PostgresRatingRepositoryAdapter(RatingRepositoryProtocol[AsyncSession]):
 
         dwithin_filter = sa.text("""
             ST_DWithin(
-                ST_MakePoint(PrimaryRatingORM.longitude, PrimaryRatingORM.latitude)::geography,
+                ST_MakePoint(primary_ratings.longitude, primary_ratings.latitude)::geography,
                 ST_MakePoint(:user_lon, :user_lat)::geography,
                 :distance
             )
@@ -275,19 +283,19 @@ class PostgresRatingRepositoryAdapter(RatingRepositoryProtocol[AsyncSession]):
 
         score_multiplier = sa.text("""
             CASE
-                WHEN PrimaryRatingORM.boost_expires_at IS NOT NULL
-                     AND PrimaryRatingORM.boost_expires_at > NOW()
+                WHEN primary_ratings.boost_expires_at IS NOT NULL
+                     AND primary_ratings.boost_expires_at > NOW()
                      AND ST_DWithin(
-                         ST_MakePoint(PrimaryRatingORM.longitude, PrimaryRatingORM.latitude)::geography,
+                         ST_MakePoint(primary_ratings.longitude, primary_ratings.latitude)::geography,
                          ST_MakePoint(:user_lon, :user_lat)::geography,
                          :distance
                      )
                 THEN 3.0 * 1.2
-                WHEN PrimaryRatingORM.boost_expires_at IS NOT NULL
-                     AND PrimaryRatingORM.boost_expires_at > NOW()
+                WHEN primary_ratings.boost_expires_at IS NOT NULL
+                     AND primary_ratings.boost_expires_at > NOW()
                 THEN 3.0
                 WHEN ST_DWithin(
-                         ST_MakePoint(PrimaryRatingORM.longitude, PrimaryRatingORM.latitude)::geography,
+                         ST_MakePoint(primary_ratings.longitude, primary_ratings.latitude)::geography,
                          ST_MakePoint(:user_lon, :user_lat)::geography,
                          :distance
                      )
@@ -299,23 +307,27 @@ class PostgresRatingRepositoryAdapter(RatingRepositoryProtocol[AsyncSession]):
         all_exclude_ids = set(exclude_ids) if exclude_ids else set()
         all_exclude_ids.add(viewer_id)
 
+        filters: list[object] = [
+            CombinedRatingORM.status == "active",
+            dwithin_filter.bindparams(user_lat=user_lat, user_lon=user_lon, distance=distance_m),
+            PrimaryRatingORM.age >= age_min,
+            PrimaryRatingORM.age <= age_max,
+        ]
+        if gender_pref not in (None, "", "any"):
+            filters.append(PrimaryRatingORM.gender == gender_pref)
+
         query = (
             sa
             .select(
                 CombinedRatingORM.telegram_id,
+                CombinedRatingORM.combined_score,
                 (
                     CombinedRatingORM.combined_score
                     * score_multiplier.bindparams(user_lat=user_lat, user_lon=user_lon, distance=distance_m)
                 ).label("boosted_score"),
             )
             .join(PrimaryRatingORM, CombinedRatingORM.telegram_id == PrimaryRatingORM.telegram_id)
-            .where(
-                CombinedRatingORM.status == "active",
-                dwithin_filter.bindparams(user_lat=user_lat, user_lon=user_lon, distance=distance_m),
-                PrimaryRatingORM.gender == gender_pref,
-                PrimaryRatingORM.age >= age_min,
-                PrimaryRatingORM.age <= age_max,
-            )
+            .where(*filters)
         )
 
         if all_exclude_ids:

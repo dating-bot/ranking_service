@@ -6,7 +6,13 @@ from ranking_service.infra.postgres import PostgresReplicaConfig as PostgresRepl
 from ranking_service.infra.postgres import provide_async_engine as provide_async_engine
 from ranking_service.infra.postgres import provide_async_engine_replica as provide_async_engine_replica
 from ranking_service.infra.postgres import provide_async_session_factory as provide_async_session_factory
-from ranking_service.infra.postgres import provide_async_session_factory_replica as provide_async_session_factory_replica
+from ranking_service.infra.postgres import (
+    provide_async_session_factory_replica as provide_async_session_factory_replica,
+)
+from ranking_service.infra.profile_service import ProfileServiceConfig as ProfileServiceConfig
+from ranking_service.infra.profile_service import provide_profile_stub as provide_profile_stub
+from ranking_service.infra.rabbitmq import RabbitMQConfig as RabbitMQConfig
+from ranking_service.infra.rabbitmq import provide_rabbitmq_connection as provide_rabbitmq_connection
 from ranking_service.infra.valkey import ValkeyClient as ValkeyClient
 from ranking_service.infra.valkey import ValkeyConfig as ValkeyConfig
 from ranking_service.infra.valkey import provide_valkey_client as provide_valkey_client

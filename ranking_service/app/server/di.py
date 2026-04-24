@@ -1,9 +1,12 @@
 from typing import final
 
 import dishka
+import aio_pika
 from sqlalchemy.ext.asyncio import AsyncSession
+from external_clients.profile_api.v1.profile_grpc import ProfileServiceStub
 
 from ranking_service import adapters, infra, protocols, usecases
+from ranking_service.app.consumers.events_consumer import EventsConsumer
 from ranking_service.app.server import grpc_handler
 
 
@@ -19,6 +22,8 @@ class InfraProvider(dishka.Provider):
     async_session_factory_replica = dishka.provide(staticmethod(infra.provide_async_session_factory_replica))
     valkey = dishka.provide(staticmethod(infra.provide_valkey_client))
     valkey_rankings = dishka.provide(staticmethod(infra.provide_valkey_client_rankings))
+    rabbitmq_connection = dishka.provide(staticmethod(infra.provide_rabbitmq_connection))
+    profile_stub = dishka.provide(staticmethod(infra.provide_profile_stub), provides=ProfileServiceStub)
 
 
 @final
@@ -83,6 +88,21 @@ class AppProvider(dishka.Provider):
         )
 
     @dishka.provide
+    def provide_sync_profile_to_ranking(
+        self,
+        profile_stub: ProfileServiceStub,
+        rating_repository: protocols.RatingRepositoryProtocol[AsyncSession],
+        calc_primary_score: usecases.CalcPrimaryScore[AsyncSession],
+        calc_combined_score: usecases.CalcCombinedScore[AsyncSession],
+    ) -> usecases.SyncProfileToRanking[AsyncSession]:
+        return usecases.SyncProfileToRanking[AsyncSession](
+            profile_stub=profile_stub,
+            rating_repository=rating_repository,
+            calc_primary_score=calc_primary_score,
+            calc_combined_score=calc_combined_score,
+        )
+
+    @dishka.provide
     def provide_ranking_service_handler(
         self,
         ranked_queue: protocols.RankedQueueProtocol,
@@ -91,6 +111,19 @@ class AppProvider(dishka.Provider):
         return grpc_handler.RankingServiceHandler(
             _ranked_queue=ranked_queue,
             _calc_behavioral_score=calc_behavioral_score,
+        )
+
+    @dishka.provide
+    def provide_events_consumer(
+        self,
+        rabbitmq_connection: aio_pika.abc.AbstractRobustConnection,
+        sync_profile_to_ranking: usecases.SyncProfileToRanking[AsyncSession],
+        interaction_staging_repository: protocols.InteractionStagingRepositoryProtocol[AsyncSession],
+    ) -> EventsConsumer:
+        return EventsConsumer(
+            connection=rabbitmq_connection,
+            sync_profile_to_ranking=sync_profile_to_ranking,
+            interaction_staging_repository=interaction_staging_repository,
         )
 
 

@@ -9,9 +9,9 @@ services:
       - ./config.docker.toml:/app/config.toml:ro
     networks:
       - dating_bot_net
-    depends_on:
-      ranking_postgres:
-        condition: service_healthy
+    external_links:
+      - dating_bot_valkey:valkey
+      - dating_bot_rabbitmq:rabbitmq
     healthcheck:
       test: ["CMD", "grpc_health_probe", "-addr=:50051"]
       interval: 10s
@@ -19,7 +19,9 @@ services:
       retries: 3
 
   ranking_postgres:
-    image: ankane/pgvector:latest
+    build:
+      context: .
+      dockerfile: docker/postgres/Dockerfile
     environment:
       POSTGRES_USER: ranking
       POSTGRES_PASSWORD: ranking
@@ -36,11 +38,22 @@ services:
   ranking_celery:
     build: .
     container_name: ranking_celery
-    command: ["uv", "run", "celery", "-A", "ranking_service.app.celery", "worker", "--loglevel=info"]
+    command:
+      [
+        "uv",
+        "run",
+        "celery",
+        "-A",
+        "ranking_service.app.celery",
+        "worker",
+        "--loglevel=info",
+      ]
     volumes:
       - ./config.docker.toml:/app/config.toml:ro
     networks:
       - dating_bot_net
+    external_links:
+      - dating_bot_valkey:valkey
     depends_on:
       - ranking_postgres
     restart: unless-stopped

@@ -90,3 +90,16 @@ class ValkeyRankedQueueAdapter(RankedQueueProtocol):
             rank=parsed["rank"],
             reason=parsed["reason"],
         )
+
+    @override
+    async def lrange_viewer_candidates(self, viewer_id: int, start: int, end: int) -> list[RankedCandidate]:
+        data = await self._valkey.client.lrange(self._viewer_queue_key(viewer_id), start, end)
+        return [
+            RankedCandidate(
+                telegram_id=parsed["telegram_id"],
+                combined_score=parsed["combined_score"],
+                rank=parsed["rank"],
+                reason=parsed["reason"],
+            )
+            for parsed in (json.loads(item) for item in data)
+        ]

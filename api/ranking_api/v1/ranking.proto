@@ -4,6 +4,7 @@ package ranking_api.v1;
 service RankingService {
   rpc GetNextCandidate(GetNextCandidateRequest) returns (GetNextCandidateResponse);
   rpc UpdateEngagement(UpdateEngagementRequest) returns (UpdateEngagementResponse);
+  rpc GetViewerQueueState(GetViewerQueueStateRequest) returns (GetViewerQueueStateResponse);
 }
 
 message GetNextCandidateRequest {
@@ -23,4 +24,14 @@ message UpdateEngagementRequest {
 
 message UpdateEngagementResponse {
   bool success = 1;
+}
+
+message GetViewerQueueStateRequest {
+  int64 viewer_id = 1;
+}
+
+message GetViewerQueueStateResponse {
+  int64 queue_len = 1;
+  int64 head_candidate_telegram_id = 2;
+  repeated int64 preview_telegram_ids = 3;
 }

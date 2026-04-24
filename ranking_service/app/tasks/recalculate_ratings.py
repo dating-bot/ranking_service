@@ -5,6 +5,7 @@ from celery import group, shared_task
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from ranking_service.adapters.rating.postgres.adapter import PostgresRatingRepositoryAdapter
+from ranking_service.app.celery import celery_app
 from ranking_service.infra.config import GlobalConfig
 from ranking_service.usecases.calc_combined.usecase import CalcCombinedScore
 
@@ -52,15 +53,15 @@ async def _process_shard(shard: int, total_shards: int) -> int:
         await engine.dispose()
 
 
-@shared_task
-def recalculate_ratings(shard: int, total: int = DEFAULT_TOTAL_SHARDS) -> dict[str, int]:
+@shared_task(bind=True, app=celery_app)
+def recalculate_ratings(self, shard: int, total: int = DEFAULT_TOTAL_SHARDS) -> dict[str, int]:
     processed = asyncio.run(_process_shard(shard, total))
     log.info("recalculate_ratings completed", shard=shard, processed=processed)
     return {"shard": shard, "processed": processed}
 
 
-@shared_task
-def recalculate_ratings_batch() -> dict[str, object]:
+@shared_task(bind=True, app=celery_app)
+def recalculate_ratings_batch(self) -> dict[str, object]:
     total_shards = DEFAULT_TOTAL_SHARDS
     group_tasks = [recalculate_ratings.s(shard=i, total=total_shards) for i in range(total_shards)]
     result = group(group_tasks).apply_async()

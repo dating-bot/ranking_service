@@ -71,6 +71,24 @@ class RankingServiceHandler(RankingServiceBase):
 
     @override
     @unary
+    async def GetViewerQueueState(
+        self, request: ranking_pb2.GetViewerQueueStateRequest
+    ) -> ranking_pb2.GetViewerQueueStateResponse:
+        if not request.viewer_id:
+            raise GRPCError(Status.INVALID_ARGUMENT, "viewer_id is required")
+
+        viewer_id = request.viewer_id
+        q_len = await self._ranked_queue.get_viewer_queue_len(viewer_id)
+        preview = await self._ranked_queue.lrange_viewer_candidates(viewer_id, 0, 4)
+        head = preview[0].telegram_id if preview else 0
+        return ranking_pb2.GetViewerQueueStateResponse(
+            queue_len=q_len,
+            head_candidate_telegram_id=head,
+            preview_telegram_ids=[c.telegram_id for c in preview],
+        )
+
+    @override
+    @unary
     async def UpdateEngagement(
         self, request: ranking_pb2.UpdateEngagementRequest
     ) -> ranking_pb2.UpdateEngagementResponse:

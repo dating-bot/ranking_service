@@ -5,6 +5,7 @@ import grpclib.server
 import structlog
 
 from ranking_service import infra
+from ranking_service.app.consumers.events_consumer import EventsConsumer
 from ranking_service.app.server import di
 from ranking_service.app.server.grpc_handler import RankingServiceHandler
 from ranking_service.app.server.utils.logger import configure_logger
@@ -38,6 +39,7 @@ async def main() -> None:
     log.info("Starting ranking-service")
 
     grpc_handler_instance = await di.container.get(RankingServiceHandler)
+    events_consumer = await di.container.get(EventsConsumer)
     grpc_config = await di.container.get(infra.GrpcServerConfig)
 
     shutdown_event = asyncio.Event()
@@ -51,7 +53,9 @@ async def main() -> None:
         loop.add_signal_handler(sig, signal_handler)
 
     grpc_task = asyncio.create_task(run_grpc_server(grpc_handler_instance, grpc_config))
+    consumer_task = asyncio.create_task(events_consumer.run())
     log.info("gRPC server task started")
+    log.info("Events consumer task started")
 
     try:
         _ = await shutdown_event.wait()
@@ -60,7 +64,8 @@ async def main() -> None:
     finally:
         log.info("Stopping server")
         _ = grpc_task.cancel()
-        _ = await asyncio.gather(grpc_task, return_exceptions=True)
+        await events_consumer.stop()
+        _ = await asyncio.gather(grpc_task, consumer_task, return_exceptions=True)
         await di.container.close()
         log.info("Server stopped")
 

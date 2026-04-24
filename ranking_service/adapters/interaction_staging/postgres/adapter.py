@@ -54,3 +54,13 @@ class PostgresInteractionStagingRepositoryAdapter(InteractionStagingRepositoryPr
             target_telegram_id=row["target_telegram_id"],
             created_at=row["created_at"],
         )
+
+    @override
+    async def list_target_ids_for_actor(self, session: AsyncSession, actor_telegram_id: int) -> list[int]:
+        result = await session.execute(
+            sa
+            .select(InteractionStagingORM.target_telegram_id)
+            .where(InteractionStagingORM.actor_telegram_id == actor_telegram_id)
+            .distinct()
+        )
+        return [row.target_telegram_id for row in result.all()]

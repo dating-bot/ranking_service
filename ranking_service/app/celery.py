@@ -9,12 +9,8 @@ celery_app = Celery(
     ],
 )
 
-celery_app.conf.beat_schedule = {
-    "recalculate_ratings": {
-        "task": "ranking_service.app.tasks.recalculate_ratings.recalculate_ratings_batch",
-        "schedule": 900.0,
-    },
-}
-
 celery_app.conf.timezone = "UTC"
 celery_app.conf.broker_url = "redis://valkey:6379/0"
+
+# Make this the default app for shared_task
+celery_app.set_default()

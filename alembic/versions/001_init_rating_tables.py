@@ -19,6 +19,8 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    op.execute(sa.text("CREATE EXTENSION IF NOT EXISTS postgis"))
+
     op.create_table(
         "primary_ratings",
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
