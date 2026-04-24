@@ -16,6 +16,7 @@ PROFILE_UPDATED_QUEUE = "ranking.profile.updated"
 PHOTO_UPLOADED_QUEUE = "ranking.photo.uploaded"
 RANKING_INTERACTION_LIKE_QUEUE = "ranking.interaction.like"
 RANKING_INTERACTION_SKIP_QUEUE = "ranking.interaction.skip"
+RANKING_INTERACTION_UNDO_SKIP_QUEUE = "ranking.interaction.undo_skip"
 
 
 @final
@@ -49,6 +50,7 @@ class EventsConsumer[SessionT]:
 
         like_queue = await channel.declare_queue(RANKING_INTERACTION_LIKE_QUEUE, durable=True)
         skip_queue = await channel.declare_queue(RANKING_INTERACTION_SKIP_QUEUE, durable=True)
+        undo_skip_queue = await channel.declare_queue(RANKING_INTERACTION_UNDO_SKIP_QUEUE, durable=True)
 
         try:
             async with asyncio.TaskGroup() as tg:
@@ -56,6 +58,7 @@ class EventsConsumer[SessionT]:
                 _ = tg.create_task(self._consume_profile_events(photo_uploaded_queue))
                 _ = tg.create_task(self._consume_interactions(like_queue))
                 _ = tg.create_task(self._consume_interactions(skip_queue))
+                _ = tg.create_task(self._consume_interactions(undo_skip_queue))
         finally:
             self._channel = None
 
@@ -89,13 +92,20 @@ class EventsConsumer[SessionT]:
                         actor_id = int(payload.get("actor_telegram_id") or payload.get("liker_telegram_id"))
                         target_id = int(payload.get("target_telegram_id") or payload.get("liked_telegram_id"))
                         async with self._interaction_staging_repository.context() as session:
-                            _ = await self._interaction_staging_repository.insert_staging(
-                                session,
-                                InteractionStagingRepositoryProtocol.InsertStagingRequest(
-                                    actor_telegram_id=actor_id,
-                                    target_telegram_id=target_id,
-                                ),
-                            )
+                            if queue.name == RANKING_INTERACTION_UNDO_SKIP_QUEUE:
+                                await self._interaction_staging_repository.delete_staging(
+                                    session,
+                                    actor_id,
+                                    target_id,
+                                )
+                            else:
+                                _ = await self._interaction_staging_repository.insert_staging(
+                                    session,
+                                    InteractionStagingRepositoryProtocol.InsertStagingRequest(
+                                        actor_telegram_id=actor_id,
+                                        target_telegram_id=target_id,
+                                    ),
+                                )
                         log.debug(
                             "ranking interaction staged", queue=queue.name, actor_id=actor_id, target_id=target_id
                         )

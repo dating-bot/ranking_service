@@ -79,3 +79,17 @@ class PostgresInteractionStagingRepositoryAdapter(InteractionStagingRepositoryPr
             .distinct()
         )
         return [row.target_telegram_id for row in result.all()]
+
+    @override
+    async def delete_staging(
+        self,
+        session: AsyncSession,
+        actor_telegram_id: int,
+        target_telegram_id: int,
+    ) -> None:
+        _ = await session.execute(
+            sa.delete(InteractionStagingORM).where(
+                InteractionStagingORM.actor_telegram_id == actor_telegram_id,
+                InteractionStagingORM.target_telegram_id == target_telegram_id,
+            )
+        )
