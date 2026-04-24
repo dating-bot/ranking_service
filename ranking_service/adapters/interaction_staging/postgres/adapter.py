@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from typing import final, override
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ranking_service.adapters.postgres_models.models import InteractionStagingORM
@@ -34,11 +35,13 @@ class PostgresInteractionStagingRepositoryAdapter(InteractionStagingRepositoryPr
         self, session: AsyncSession, request: InteractionStagingRepositoryProtocol.InsertStagingRequest
     ) -> InteractionStaging:
         result = await session.execute(
-            sa
-            .insert(InteractionStagingORM)
+            pg_insert(InteractionStagingORM)
             .values(
                 actor_telegram_id=request.actor_telegram_id,
                 target_telegram_id=request.target_telegram_id,
+            )
+            .on_conflict_do_nothing(
+                index_elements=["actor_telegram_id", "target_telegram_id"],
             )
             .returning(
                 InteractionStagingORM.id,
@@ -47,7 +50,19 @@ class PostgresInteractionStagingRepositoryAdapter(InteractionStagingRepositoryPr
                 InteractionStagingORM.created_at,
             )
         )
-        row = result.mappings().one()
+        row = result.mappings().one_or_none()
+        if row is None:
+            existing_result = await session.execute(
+                sa
+                .select(InteractionStagingORM)
+                .where(
+                    InteractionStagingORM.actor_telegram_id == request.actor_telegram_id,
+                    InteractionStagingORM.target_telegram_id == request.target_telegram_id,
+                )
+                .limit(1)
+            )
+            existing = existing_result.scalar_one()
+            return existing.to_domain()
         return InteractionStaging(
             id=row["id"],
             actor_telegram_id=row["actor_telegram_id"],

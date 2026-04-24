@@ -8,7 +8,7 @@ from grpclib.exceptions import GRPCError
 from ranking_api.v1 import ranking_pb2
 from ranking_api.v1.ranking_grpc import RankingServiceBase
 from ranking_service.app.server.utils.unary import unary
-from ranking_service.app.tasks.prefetch_ranked_queue import prefetch_ranked_queue
+from ranking_service.app.tasks.prefetch_ranked_queue import _prefetch_for_viewer, prefetch_ranked_queue
 from ranking_service.protocols.rating.repository import RankedQueueProtocol
 from ranking_service.usecases.calc_behavioral.usecase import CalcBehavioralScore
 
@@ -37,8 +37,12 @@ class RankingServiceHandler(RankingServiceBase):
         candidate = await self._ranked_queue.lpop_viewer_candidate(viewer_id)
 
         if candidate is None:
-            log.debug("queue empty, triggering prefetch", viewer_id=viewer_id)
-            prefetch_ranked_queue.delay(viewer_id)
+            log.debug("queue empty, running sync prefetch", viewer_id=viewer_id)
+            try:
+                _ = await _prefetch_for_viewer(viewer_id, limit=CANDIDATES_PER_PAGE)
+            except Exception:
+                log.exception("sync prefetch failed, scheduling async prefetch", viewer_id=viewer_id)
+                prefetch_ranked_queue.delay(viewer_id)
             candidate = await self._ranked_queue.lpop_viewer_candidate(viewer_id)
 
         queue_len = await self._ranked_queue.get_viewer_queue_len(viewer_id)

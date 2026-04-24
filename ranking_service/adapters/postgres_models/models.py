@@ -141,7 +141,8 @@ class InteractionStagingORM(Base):
         default=lambda: datetime.now(UTC),
     )
 
-    __table_args__: tuple[sa.Index, sa.Index] = (
+    __table_args__: tuple[sa.UniqueConstraint, sa.Index, sa.Index] = (
+        sa.UniqueConstraint("actor_telegram_id", "target_telegram_id", name="uq_interaction_staging_actor_target"),
         sa.Index("ix_interaction_staging_actor", "actor_telegram_id"),
         sa.Index("ix_interaction_staging_target", "target_telegram_id"),
     )
