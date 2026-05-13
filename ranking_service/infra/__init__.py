@@ -3,9 +3,14 @@ from ranking_service.infra.grpc import GrpcServerConfig as GrpcServerConfig
 from ranking_service.infra.postgres import AsyncSessionFactory as AsyncSessionFactory
 from ranking_service.infra.postgres import PostgresConfig as PostgresConfig
 from ranking_service.infra.postgres import PostgresReplicaConfig as PostgresReplicaConfig
+from ranking_service.infra.postgres import ProfilePostgresConfig as ProfilePostgresConfig
 from ranking_service.infra.postgres import provide_async_engine as provide_async_engine
+from ranking_service.infra.postgres import provide_async_engine_profile as provide_async_engine_profile
 from ranking_service.infra.postgres import provide_async_engine_replica as provide_async_engine_replica
 from ranking_service.infra.postgres import provide_async_session_factory as provide_async_session_factory
+from ranking_service.infra.postgres import (
+    provide_async_session_factory_profile as provide_async_session_factory_profile,
+)
 from ranking_service.infra.postgres import (
     provide_async_session_factory_replica as provide_async_session_factory_replica,
 )

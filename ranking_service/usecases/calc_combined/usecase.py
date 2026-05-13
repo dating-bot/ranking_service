@@ -34,6 +34,7 @@ class CalcCombinedScore[SessionT]:
         behavioral_score: float
         referral_score: float = 0.0
         semantic_bonus: float = 0.0
+        status: str = "active"
 
     @dataclass
     class Response:
@@ -65,6 +66,7 @@ class CalcCombinedScore[SessionT]:
                     primary_score=request.primary_score,
                     behavioral_score=request.behavioral_score,
                     combined_score=combined_score,
+                    status=request.status,
                 ),
             )
 

@@ -185,6 +185,7 @@ class PostgresRatingRepositoryAdapter(RatingRepositoryProtocol[AsyncSession]):
                 primary_score=request.primary_score,
                 behavioral_score=request.behavioral_score,
                 combined_score=request.combined_score,
+                status=request.status,
             )
             .on_conflict_do_update(
                 index_elements=["telegram_id"],
@@ -192,6 +193,7 @@ class PostgresRatingRepositoryAdapter(RatingRepositoryProtocol[AsyncSession]):
                     "primary_score": request.primary_score,
                     "behavioral_score": request.behavioral_score,
                     "combined_score": request.combined_score,
+                    "status": request.status,
                     "updated_at": datetime.now(UTC),
                 },
             )

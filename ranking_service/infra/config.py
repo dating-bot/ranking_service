@@ -4,7 +4,7 @@ from typing import ClassVar, override
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict, TomlConfigSettingsSource
 
 from ranking_service.infra.grpc import GrpcServerConfig
-from ranking_service.infra.postgres import PostgresConfig, PostgresReplicaConfig
+from ranking_service.infra.postgres import PostgresConfig, PostgresReplicaConfig, ProfilePostgresConfig
 from ranking_service.infra.profile_service import ProfileServiceConfig
 from ranking_service.infra.rabbitmq import RabbitMQConfig
 from ranking_service.infra.valkey import ValkeyConfig
@@ -15,6 +15,7 @@ class GlobalConfig(BaseSettings):
 
     postgres: PostgresConfig
     postgres_replica: PostgresReplicaConfig
+    profile_postgres: ProfilePostgresConfig
     grpc_server: GrpcServerConfig
     valkey: ValkeyConfig
     profile_service: ProfileServiceConfig

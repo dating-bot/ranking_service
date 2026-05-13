@@ -1,10 +1,11 @@
+from collections.abc import AsyncGenerator
 from typing import final
 
-import dishka
 import aio_pika
-from sqlalchemy.ext.asyncio import AsyncSession
-from external_clients.profile_api.v1.profile_grpc import ProfileServiceStub
+import dishka
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
+from external_clients.profile_api.v1.profile_grpc import ProfileServiceStub
 from ranking_service import adapters, infra, protocols, usecases
 from ranking_service.app.consumers.events_consumer import EventsConsumer
 from ranking_service.app.server import grpc_handler
@@ -52,6 +53,18 @@ class AdapterProvider(dishka.Provider):
         return adapters.PostgresInteractionStagingRepositoryAdapter(session_factory=session_factory)
 
     @dishka.provide
+    async def provide_profile_insights(
+        self,
+        profile_postgres: infra.ProfilePostgresConfig,
+    ) -> AsyncGenerator[protocols.ProfileInsightsProtocol]:
+        engine = create_async_engine(profile_postgres.url)
+        session_factory = infra.AsyncSessionFactory(engine, class_=AsyncSession, expire_on_commit=False)
+        try:
+            yield adapters.PostgresProfileInsightsAdapter(session_factory=session_factory)
+        finally:
+            await engine.dispose()
+
+    @dishka.provide
     def provide_ranked_queue(self, valkey_rankings: infra.ValkeyClient) -> protocols.RankedQueueProtocol:
         return adapters.ValkeyRankedQueueAdapter(valkey=valkey_rankings)
 
@@ -92,12 +105,14 @@ class AppProvider(dishka.Provider):
         self,
         profile_stub: ProfileServiceStub,
         rating_repository: protocols.RatingRepositoryProtocol[AsyncSession],
+        profile_insights: protocols.ProfileInsightsProtocol,
         calc_primary_score: usecases.CalcPrimaryScore[AsyncSession],
         calc_combined_score: usecases.CalcCombinedScore[AsyncSession],
     ) -> usecases.SyncProfileToRanking[AsyncSession]:
         return usecases.SyncProfileToRanking[AsyncSession](
             profile_stub=profile_stub,
             rating_repository=rating_repository,
+            profile_insights=profile_insights,
             calc_primary_score=calc_primary_score,
             calc_combined_score=calc_combined_score,
         )

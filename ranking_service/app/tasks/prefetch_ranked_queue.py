@@ -10,10 +10,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from external_clients.profile_api.v1.profile_grpc import ProfileServiceStub
 from external_clients.profile_api.v1.profile_pb2 import GetPreferencesRequest, GetProfileRequest
 from ranking_service.adapters.interaction_staging.postgres.adapter import PostgresInteractionStagingRepositoryAdapter
+from ranking_service.adapters.profile_insights.postgres.adapter import PostgresProfileInsightsAdapter
 from ranking_service.adapters.rating.postgres.adapter import PostgresRatingRepositoryAdapter
 from ranking_service.app.celery import celery_app
+from ranking_service.domain import RankedCandidate
 from ranking_service.infra.config import GlobalConfig
 from ranking_service.infra.valkey import ValkeyClient
+from ranking_service.protocols import ProfileInsightsProtocol
+from ranking_service.usecases.calc_combined.usecase import COMBINED_WEIGHT_SEMANTIC
 from ranking_service.usecases.sync_profile_to_ranking import map_gender_pref_to_domain
 
 log = structlog.stdlib.get_logger("ranking_service.tasks.prefetch_ranked_queue")
@@ -38,7 +42,7 @@ async def _release_lock(client, lock_key: str, lock_value: str) -> None:
     )
 
 
-async def _prefetch_for_viewer(viewer_id: int, limit: int = 10) -> int:
+async def _prefetch_for_viewer(viewer_id: int, limit: int = 10) -> int:  # noqa: PLR0915
     config = GlobalConfig.load()
     queue_key = f"{RANKED_QUEUE_KEY_PREFIX}:{viewer_id}"
     lock_key = f"{PREFETCH_LOCK_PREFIX}:{viewer_id}"
@@ -54,10 +58,13 @@ async def _prefetch_for_viewer(viewer_id: int, limit: int = 10) -> int:
 
     engine = create_async_engine(config.postgres.url)
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    profile_engine = create_async_engine(config.profile_postgres.url)
+    profile_session_factory = async_sessionmaker(profile_engine, class_=AsyncSession, expire_on_commit=False)
     profile_channel = grpclib.client.Channel(host=config.profile_service.host, port=config.profile_service.port)
 
     try:
         rating_repo = PostgresRatingRepositoryAdapter(session_factory=session_factory)
+        profile_insights = PostgresProfileInsightsAdapter(session_factory=profile_session_factory)
         interaction_repo = PostgresInteractionStagingRepositoryAdapter(session_factory=session_factory)
         profile_stub = ProfileServiceStub(profile_channel)
 
@@ -84,7 +91,7 @@ async def _prefetch_for_viewer(viewer_id: int, limit: int = 10) -> int:
                         age_min=viewer_prefs.age_min if viewer_prefs.found and viewer_prefs.age_min else 18,
                         age_max=viewer_prefs.age_max if viewer_prefs.found and viewer_prefs.age_max else 100,
                         radius_km=radius_km,
-                        limit=limit,
+                        limit=max(limit * 5, 50),
                         exclude_ids=exclude_ids,
                     )
                     if candidates:
@@ -96,8 +103,26 @@ async def _prefetch_for_viewer(viewer_id: int, limit: int = 10) -> int:
                     viewer_id=viewer_id,
                 )
                 candidates = await rating_repo.list_top_candidates(
-                    session, limit=limit, exclude_ids=all_exclude_ids
+                    session,
+                    limit=max(limit * 5, 50),
+                    exclude_ids=all_exclude_ids,
                 )
+        try:
+            candidates = await _rerank_with_semantic(
+                profile_insights=profile_insights,
+                viewer_id=viewer_id,
+                candidates=candidates,
+                limit=limit,
+            )
+        except Exception:
+            # Degrade gracefully: semantic insights are optional for candidate delivery.
+            log.exception(
+                "semantic rerank failed, falling back to base ranking",
+                viewer_id=viewer_id,
+            )
+            candidates = candidates[:limit]
+            for rank, candidate in enumerate(candidates, start=1):
+                candidate.rank = rank
         if not candidates:
             await valkey_client.client.delete(queue_key)
             log.info(
@@ -131,10 +156,52 @@ async def _prefetch_for_viewer(viewer_id: int, limit: int = 10) -> int:
         finally:
             await valkey_client.close()
         profile_channel.close()
+        await profile_engine.dispose()
         await engine.dispose()
 
 
+async def _rerank_with_semantic(
+    *,
+    profile_insights: ProfileInsightsProtocol,
+    viewer_id: int,
+    candidates: list[RankedCandidate],
+    limit: int,
+) -> list[RankedCandidate]:
+    if not candidates:
+        return []
+
+    candidate_ids = [item.telegram_id for item in candidates]
+    bonuses = await profile_insights.get_semantic_bonuses(
+        viewer_telegram_id=viewer_id,
+        candidate_telegram_ids=candidate_ids,
+    )
+
+    adjusted: list[tuple[float, RankedCandidate]] = []
+    for candidate in candidates:
+        semantic_bonus = bonuses.get(candidate.telegram_id, 0.0)
+        semantic_contribution = COMBINED_WEIGHT_SEMANTIC * semantic_bonus * 100.0
+        adjusted_score = candidate.combined_score + semantic_contribution
+        reason = candidate.reason if semantic_bonus == 0.0 else f"{candidate.reason}+semantic"
+        adjusted.append(
+            (
+                adjusted_score,
+                RankedCandidate(
+                    telegram_id=candidate.telegram_id,
+                    combined_score=adjusted_score,
+                    rank=0,
+                    reason=reason,
+                ),
+            )
+        )
+
+    adjusted.sort(key=lambda item: item[0], reverse=True)
+    top = [item[1] for item in adjusted[:limit]]
+    for rank, candidate in enumerate(top, start=1):
+        candidate.rank = rank
+    return top
+
+
 @shared_task(bind=True, app=celery_app)
-def prefetch_ranked_queue(self, viewer_id: int, limit: int = 10) -> dict[str, int]:
+def prefetch_ranked_queue(_self, viewer_id: int, limit: int = 10) -> dict[str, int]:
     count = asyncio.run(_prefetch_for_viewer(viewer_id, limit))
     return {"viewer_id": viewer_id, "candidates_pushed": count}

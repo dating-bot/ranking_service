@@ -1,0 +1,13 @@
+from typing import Protocol
+
+
+class ProfileInsightsProtocol(Protocol):
+    async def get_ai_quality_score(self, telegram_id: int) -> float | None: ...
+    async def get_profile_is_active(self, telegram_id: int) -> bool: ...
+
+    async def get_semantic_bonuses(
+        self,
+        *,
+        viewer_telegram_id: int,
+        candidate_telegram_ids: list[int],
+    ) -> dict[int, float]: ...

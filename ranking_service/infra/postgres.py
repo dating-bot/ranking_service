@@ -39,6 +39,18 @@ class PostgresReplicaConfig(BaseModel):
         return f"postgresql+asyncpg://{self.username}:{self.password}@{self.host}:{self.port}/{self.database}"
 
 
+class ProfilePostgresConfig(BaseModel):
+    host: str = Field(description="Profile DB Host")
+    port: int = Field(description="Port")
+    username: str = Field(description="Username")
+    password: str = Field(description="Password")
+    database: str = Field(description="Database name")
+
+    @property
+    def url(self) -> str:
+        return f"postgresql+asyncpg://{self.username}:{self.password}@{self.host}:{self.port}/{self.database}"
+
+
 class AsyncSessionFactory(async_sessionmaker[AsyncSession]): ...
 
 
@@ -64,9 +76,21 @@ async def provide_async_engine_replica(config: PostgresReplicaConfig) -> AsyncGe
         await engine.dispose()
 
 
+async def provide_async_engine_profile(config: ProfilePostgresConfig) -> AsyncGenerator[AsyncEngine]:
+    engine = create_async_engine(config.url)
+    try:
+        yield engine
+    finally:
+        await engine.dispose()
+
+
 async def provide_async_session_factory(engine: AsyncEngine) -> AsyncSessionFactory:
     return AsyncSessionFactory(engine, class_=AsyncSession, expire_on_commit=False)
 
 
 async def provide_async_session_factory_replica(engine: AsyncEngine) -> AsyncSessionFactory:
+    return AsyncSessionFactory(engine, class_=AsyncSession, expire_on_commit=False)
+
+
+async def provide_async_session_factory_profile(engine: AsyncEngine) -> AsyncSessionFactory:
     return AsyncSessionFactory(engine, class_=AsyncSession, expire_on_commit=False)

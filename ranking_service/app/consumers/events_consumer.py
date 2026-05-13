@@ -4,6 +4,7 @@ from typing import final
 
 import aio_pika
 import structlog
+import structlog.contextvars
 from aio_pika import ExchangeType
 
 from ranking_service.protocols.interaction_staging.repository import InteractionStagingRepositoryProtocol
@@ -12,8 +13,10 @@ from ranking_service.usecases.sync_profile_to_ranking import SyncProfileToRankin
 log = structlog.stdlib.get_logger("ranking_service.consumers.EventsConsumer")
 
 PROFILE_EXCHANGE = "profile_exchange"
+EVENTS_EXCHANGE = "events_exchange"
 PROFILE_UPDATED_QUEUE = "ranking.profile.updated"
 PHOTO_UPLOADED_QUEUE = "ranking.photo.uploaded"
+AI_ANALYSIS_COMPLETED_QUEUE = "ranking.ai.analysis.completed"
 RANKING_INTERACTION_LIKE_QUEUE = "ranking.interaction.like"
 RANKING_INTERACTION_SKIP_QUEUE = "ranking.interaction.skip"
 RANKING_INTERACTION_UNDO_SKIP_QUEUE = "ranking.interaction.undo_skip"
@@ -43,10 +46,17 @@ class EventsConsumer[SessionT]:
             ExchangeType.TOPIC,
             durable=True,
         )
+        events_exchange = await channel.declare_exchange(
+            EVENTS_EXCHANGE,
+            ExchangeType.TOPIC,
+            durable=True,
+        )
         profile_updated_queue = await channel.declare_queue(PROFILE_UPDATED_QUEUE, durable=True)
         _ = await profile_updated_queue.bind(profile_exchange, routing_key="profile.updated")
         photo_uploaded_queue = await channel.declare_queue(PHOTO_UPLOADED_QUEUE, durable=True)
         _ = await photo_uploaded_queue.bind(profile_exchange, routing_key="photo.uploaded")
+        ai_analysis_queue = await channel.declare_queue(AI_ANALYSIS_COMPLETED_QUEUE, durable=True)
+        _ = await ai_analysis_queue.bind(events_exchange, routing_key="ai.analysis.completed")
 
         like_queue = await channel.declare_queue(RANKING_INTERACTION_LIKE_QUEUE, durable=True)
         skip_queue = await channel.declare_queue(RANKING_INTERACTION_SKIP_QUEUE, durable=True)
@@ -56,6 +66,7 @@ class EventsConsumer[SessionT]:
             async with asyncio.TaskGroup() as tg:
                 _ = tg.create_task(self._consume_profile_events(profile_updated_queue))
                 _ = tg.create_task(self._consume_profile_events(photo_uploaded_queue))
+                _ = tg.create_task(self._consume_profile_events(ai_analysis_queue))
                 _ = tg.create_task(self._consume_interactions(like_queue))
                 _ = tg.create_task(self._consume_interactions(skip_queue))
                 _ = tg.create_task(self._consume_interactions(undo_skip_queue))
@@ -73,10 +84,12 @@ class EventsConsumer[SessionT]:
                     async with message.process(ignore_processed=True):
                         payload = json.loads(message.body)
                         telegram_id = int(payload["telegram_id"])
+                        trace_id = _extract_trace_id(message.headers)
                         try:
-                            _ = await self._sync_profile_to_ranking.execute(
-                                SyncProfileToRanking.Request(telegram_id=telegram_id)
-                            )
+                            with structlog.contextvars.bound_contextvars(trace_id=trace_id):
+                                _ = await self._sync_profile_to_ranking.execute(
+                                    SyncProfileToRanking.Request(telegram_id=telegram_id, trace_id=trace_id)
+                                )
                             log.info("ranking profile sync event processed", queue=queue.name, telegram_id=telegram_id)
                         except Exception:
                             log.exception("ranking profile sync event failed", queue=queue.name, telegram_id=telegram_id)
@@ -89,25 +102,43 @@ class EventsConsumer[SessionT]:
                 async for message in iterator:
                     async with message.process(ignore_processed=True):
                         payload = json.loads(message.body)
+                        trace_id = _extract_trace_id(message.headers)
                         actor_id = int(payload.get("actor_telegram_id") or payload.get("liker_telegram_id"))
                         target_id = int(payload.get("target_telegram_id") or payload.get("liked_telegram_id"))
-                        async with self._interaction_staging_repository.context() as session:
-                            if queue.name == RANKING_INTERACTION_UNDO_SKIP_QUEUE:
-                                await self._interaction_staging_repository.delete_staging(
-                                    session,
-                                    actor_id,
-                                    target_id,
-                                )
-                            else:
-                                _ = await self._interaction_staging_repository.insert_staging(
-                                    session,
-                                    InteractionStagingRepositoryProtocol.InsertStagingRequest(
-                                        actor_telegram_id=actor_id,
-                                        target_telegram_id=target_id,
-                                    ),
-                                )
+                        with structlog.contextvars.bound_contextvars(trace_id=trace_id):
+                            async with self._interaction_staging_repository.context() as session:
+                                if queue.name == RANKING_INTERACTION_UNDO_SKIP_QUEUE:
+                                    await self._interaction_staging_repository.delete_staging(
+                                        session,
+                                        actor_id,
+                                        target_id,
+                                    )
+                                else:
+                                    _ = await self._interaction_staging_repository.insert_staging(
+                                        session,
+                                        InteractionStagingRepositoryProtocol.InsertStagingRequest(
+                                            actor_telegram_id=actor_id,
+                                            target_telegram_id=target_id,
+                                        ),
+                                    )
                         log.debug(
                             "ranking interaction staged", queue=queue.name, actor_id=actor_id, target_id=target_id
                         )
         except (asyncio.CancelledError, aio_pika.exceptions.ChannelInvalidStateError):
             log.info("interaction consumer stopped", queue=queue.name)
+
+
+def _extract_trace_id(headers: dict[str, object] | None) -> str:
+    if not headers:
+        return "mq-no-trace"
+    trace_id = headers.get("trace_id")
+    if isinstance(trace_id, bytes):
+        return trace_id.decode("utf-8", errors="ignore")
+    if isinstance(trace_id, str) and trace_id:
+        return trace_id
+    traceparent = headers.get("traceparent")
+    if isinstance(traceparent, bytes):
+        return traceparent.decode("utf-8", errors="ignore")
+    if isinstance(traceparent, str) and traceparent:
+        return traceparent
+    return "mq-no-trace"

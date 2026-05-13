@@ -43,6 +43,7 @@ class RatingRepositoryProtocol[SessionT](Protocol):
         primary_score: float
         behavioral_score: float
         combined_score: float
+        status: str = "active"
 
     async def insert_primary_rating(self, session: SessionT, request: InsertPrimaryRatingRequest) -> PrimaryRating: ...
 
