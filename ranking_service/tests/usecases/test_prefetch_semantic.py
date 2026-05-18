@@ -14,6 +14,18 @@ class _ProfileInsights(ProfileInsightsProtocol):
         del telegram_id
         return True
 
+    async def get_verification_score(self, telegram_id: int) -> float:
+        del telegram_id
+        return 0.0
+
+    async def get_referral_score(self, telegram_id: int) -> float:
+        del telegram_id
+        return 0.0
+
+    async def get_profile_semantic_bonus(self, telegram_id: int) -> float:
+        del telegram_id
+        return 0.0
+
     async def get_semantic_bonuses(
         self,
         *,

@@ -12,6 +12,8 @@ COMBINED_WEIGHT_L1 = 0.30
 COMBINED_WEIGHT_L2 = 0.45
 COMBINED_WEIGHT_REFERRAL = 0.10
 COMBINED_WEIGHT_SEMANTIC = 0.15
+COMBINED_COMPONENT_MIN = 0.0
+COMBINED_COMPONENT_MAX = 100.0
 
 
 class CalcCombinedScoreError(Exception):
@@ -41,20 +43,25 @@ class CalcCombinedScore[SessionT]:
         combined_rating: CombinedRating
 
     async def execute(self, request: Request) -> Response:
+        primary_score = _clamp(request.primary_score, COMBINED_COMPONENT_MIN, COMBINED_COMPONENT_MAX)
+        behavioral_score = _clamp(request.behavioral_score, COMBINED_COMPONENT_MIN, COMBINED_COMPONENT_MAX)
+        referral_score = _clamp(request.referral_score, COMBINED_COMPONENT_MIN, COMBINED_COMPONENT_MAX)
+        semantic_bonus = _clamp(request.semantic_bonus, COMBINED_COMPONENT_MIN, COMBINED_COMPONENT_MAX)
+
         combined_score = (
-            COMBINED_WEIGHT_L1 * request.primary_score
-            + COMBINED_WEIGHT_L2 * request.behavioral_score
-            + COMBINED_WEIGHT_REFERRAL * request.referral_score
-            + COMBINED_WEIGHT_SEMANTIC * request.semantic_bonus
+            COMBINED_WEIGHT_L1 * primary_score
+            + COMBINED_WEIGHT_L2 * behavioral_score
+            + COMBINED_WEIGHT_REFERRAL * referral_score
+            + COMBINED_WEIGHT_SEMANTIC * semantic_bonus
         )
 
         log.debug(
             "calculating combined score",
             telegram_id=request.telegram_id,
-            primary_score=request.primary_score,
-            behavioral_score=request.behavioral_score,
-            referral_score=request.referral_score,
-            semantic_bonus=request.semantic_bonus,
+            primary_score=primary_score,
+            behavioral_score=behavioral_score,
+            referral_score=referral_score,
+            semantic_bonus=semantic_bonus,
             combined_score=combined_score,
         )
 
@@ -63,8 +70,8 @@ class CalcCombinedScore[SessionT]:
                 session,
                 RatingRepositoryProtocol.UpsertCombinedRatingRequest(
                     telegram_id=request.telegram_id,
-                    primary_score=request.primary_score,
-                    behavioral_score=request.behavioral_score,
+                    primary_score=primary_score,
+                    behavioral_score=behavioral_score,
                     combined_score=combined_score,
                     status=request.status,
                 ),
@@ -77,3 +84,7 @@ class CalcCombinedScore[SessionT]:
         )
 
         return self.Response(combined_rating=combined_rating)
+
+
+def _clamp(value: float, min_value: float, max_value: float) -> float:
+    return max(min_value, min(max_value, float(value)))

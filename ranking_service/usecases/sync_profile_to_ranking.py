@@ -21,6 +21,11 @@ from ranking_service.usecases.calc_primary.usecase import CalcPrimaryScore
 
 log = structlog.stdlib.get_logger("ranking_service.usecases.SyncProfileToRanking")
 
+COMPLETENESS_COMPONENT_POINTS = 5.0
+MAX_PHOTOS_CONSIDERED = 3.0
+MAX_PHOTOS_SCORE = 25.0
+PREFERENCES_SCORE = 10.0
+
 
 @final
 class SyncProfileToRanking[SessionT]:
@@ -62,7 +67,7 @@ class SyncProfileToRanking[SessionT]:
         )
         active_photos = sum(1 for photo in profile.photos if photo.is_active)
 
-        completeness = float(
+        completeness_flags = float(
             bool(profile.name)
             + bool(profile.bio)
             + bool(profile.city)
@@ -70,11 +75,15 @@ class SyncProfileToRanking[SessionT]:
             + (profile.gender in (GENDER_MALE, GENDER_FEMALE))
             + (profile.HasField("latitude") and profile.HasField("longitude"))
         )
-        photos_score = min(float(active_photos), 3.0)
-        prefs_score = 1.0 if preferences.found else 0.0
+        completeness = completeness_flags * COMPLETENESS_COMPONENT_POINTS
+        photos_score = min(float(active_photos), MAX_PHOTOS_CONSIDERED) / MAX_PHOTOS_CONSIDERED * MAX_PHOTOS_SCORE
+        prefs_score = PREFERENCES_SCORE if preferences.found else 0.0
         gender = {GENDER_MALE: "male", GENDER_FEMALE: "female"}.get(profile.gender)
         ai_quality_raw = await self._profile_insights.get_ai_quality_score(request.telegram_id)
         ai_quality = _normalize_ai_quality(ai_quality_raw)
+        verification_score = await self._profile_insights.get_verification_score(request.telegram_id)
+        referral_score = await self._profile_insights.get_referral_score(request.telegram_id)
+        semantic_bonus = await self._profile_insights.get_profile_semantic_bonus(request.telegram_id)
         profile_is_active = await self._profile_insights.get_profile_is_active(request.telegram_id)
         status = "active" if profile_is_active else "archived"
 
@@ -84,7 +93,7 @@ class SyncProfileToRanking[SessionT]:
                 completeness=completeness,
                 photos=photos_score,
                 prefs=prefs_score,
-                verification=0.0,
+                verification=verification_score,
                 ai_quality=ai_quality,
                 latitude=profile.latitude if profile.HasField("latitude") else None,
                 longitude=profile.longitude if profile.HasField("longitude") else None,
@@ -101,6 +110,8 @@ class SyncProfileToRanking[SessionT]:
                 telegram_id=request.telegram_id,
                 primary_score=primary.primary_rating.score,
                 behavioral_score=behavioral.engagement_score if behavioral is not None else 0.0,
+                referral_score=referral_score,
+                semantic_bonus=semantic_bonus,
                 status=status,
             )
         )
@@ -112,6 +123,9 @@ class SyncProfileToRanking[SessionT]:
             preferences_found=preferences.found,
             ai_quality_raw=ai_quality_raw,
             ai_quality_normalized=ai_quality,
+            verification_score=verification_score,
+            referral_score=referral_score,
+            semantic_bonus=semantic_bonus,
             profile_is_active=profile_is_active,
             combined_status=status,
         )

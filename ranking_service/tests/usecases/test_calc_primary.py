@@ -11,13 +11,13 @@ from ranking_service.usecases.calc_primary.usecase import CalcPrimaryScore
 
 def _make_primary_rating(
     *,
-    id: int = 1,
+    rating_id: int = 1,
     telegram_id: int = 123,
     score: float = 0.0,
     rank_percentile: float = 0.0,
 ) -> PrimaryRating:
     return PrimaryRating(
-        id=id,
+        id=rating_id,
         telegram_id=telegram_id,
         score=score,
         rank_percentile=rank_percentile,
@@ -178,3 +178,24 @@ class Test_CalcPrimaryScore:
         call_args = mock_rating_repository.upsert_primary.call_args
         saved_request = call_args.args[1]
         assert saved_request.score == 50.0
+
+    @pytest.mark.asyncio
+    async def test_clamps_components_to_invariant_ranges(
+        self,
+        usecase: CalcPrimaryScore[AsyncMock],
+        mock_rating_repository: AsyncMock,
+    ) -> None:
+        request = CalcPrimaryScore.Request(
+            telegram_id=123,
+            completeness=99,
+            photos=99,
+            prefs=99,
+            verification=99,
+            ai_quality=1.5,
+        )
+
+        await usecase.execute(request)
+
+        call_args = mock_rating_repository.upsert_primary.call_args
+        saved_request = call_args.args[1]
+        assert saved_request.score == pytest.approx(160.0)

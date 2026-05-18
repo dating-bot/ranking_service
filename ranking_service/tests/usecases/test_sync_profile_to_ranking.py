@@ -29,6 +29,18 @@ class _ProfileInsights(ProfileInsightsProtocol):
         del telegram_id
         return True
 
+    async def get_verification_score(self, telegram_id: int) -> float:
+        del telegram_id
+        return 15.0
+
+    async def get_referral_score(self, telegram_id: int) -> float:
+        del telegram_id
+        return 80.0
+
+    async def get_profile_semantic_bonus(self, telegram_id: int) -> float:
+        del telegram_id
+        return 60.0
+
     async def get_semantic_bonuses(
         self,
         *,
@@ -99,8 +111,14 @@ def test_sync_uses_ai_quality_from_profile_insights() -> None:
     calc_primary.execute.assert_called_once()
     req = calc_primary.execute.call_args.args[0]
     assert req.ai_quality == pytest.approx(0.42)
+    assert req.completeness == pytest.approx(30.0)
+    assert req.photos == pytest.approx(16.6666666667)
+    assert req.prefs == pytest.approx(0.0)
+    assert req.verification == pytest.approx(15.0)
     combined_req = calc_combined.execute.call_args.args[0]
     assert combined_req.status == "active"
+    assert combined_req.referral_score == pytest.approx(80.0)
+    assert combined_req.semantic_bonus == pytest.approx(60.0)
 
 
 def test_sync_archives_inactive_profile() -> None:
@@ -127,6 +145,32 @@ def test_sync_archives_inactive_profile() -> None:
     assert ok is True
     combined_req = calc_combined.execute.call_args.args[0]
     assert combined_req.status == "archived"
+
+
+def test_sync_prefs_component_is_applied() -> None:
+    calc_primary = AsyncMock()
+    calc_primary.execute = AsyncMock(return_value=_PrimaryResponse(primary_rating=_PrimaryRating(score=64.0)))
+    calc_combined = AsyncMock()
+    calc_combined.execute = AsyncMock(return_value=object())
+
+    class _ProfileStubWithPrefs(_ProfileStub):
+        async def GetPreferences(self, request, metadata=None):  # noqa: N802
+            del request, metadata
+            return SimpleNamespace(found=True)
+
+    usecase = SyncProfileToRanking(
+        profile_stub=_ProfileStubWithPrefs(),
+        rating_repository=_RatingRepo(),
+        profile_insights=_ProfileInsights(),
+        calc_primary_score=calc_primary,
+        calc_combined_score=calc_combined,
+    )
+
+    ok = asyncio.run(usecase.execute(SyncProfileToRanking.Request(telegram_id=101, trace_id="t-3")))
+
+    assert ok is True
+    req = calc_primary.execute.call_args.args[0]
+    assert req.prefs == pytest.approx(10.0)
 
 
 @pytest.mark.parametrize(

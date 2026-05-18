@@ -14,21 +14,25 @@
 ### 2) Формулы скоринга
 
 - `primary_score = (completeness + photos + prefs + verification) * ai_quality * 2`
+  - диапазоны L1-компонент: `completeness[0..30]`, `photos[0..25]`, `prefs[0..10]`, `verification[0..15]`, `ai_quality[0..1]`
   - [calc_primary/usecase.py](ranking_service/usecases/calc_primary/usecase.py)
 - `behavioral_score = like_ratio*40 + match_rate*20 + chat_init*15 + active_hour*5`
   - [calc_behavioral/usecase.py](ranking_service/usecases/calc_behavioral/usecase.py)
 - `combined_score = 0.30*primary + 0.45*behavioral + 0.10*referral + 0.15*semantic`
+  - диапазоны L3-компонент: каждый из `primary/behavioral/referral/semantic` ограничивается до `[0..100]`
   - [calc_combined/usecase.py](ranking_service/usecases/calc_combined/usecase.py)
 
 ### 3) Что реально подставляется в sync сейчас
 
 При `SyncProfileToRanking`:
 
-- `completeness` = сумма флагов: имя, био, город, возраст, пол, наличие гео;
-- `photos` = число активных фото, максимум 3;
-- `prefs` = 1.0 если preferences есть, иначе 0.0;
-- `verification` = 0.0;
-- `ai_quality` = 1.0 (то есть ИИ-поправка сейчас нейтральная).
+- `completeness` = `5 * N`, где `N` — число заполненных флагов из 6 (имя, био, город, возраст, пол, гео);
+- `photos` = `min(active_photos, 3) / 3 * 25`;
+- `prefs` = `10.0` если preferences есть, иначе `0.0`;
+- `verification` = `15.0` для активного Premium, иначе `0.0` (источник: profile DB);
+- `ai_quality` = нормализация `ai_quality_score` из profile DB в диапазон `[0..1]`;
+- `referral_score` = из таблицы `referrals` (если есть), иначе fallback по возрасту аккаунта (`users.created_at`);
+- `semantic_bonus` = наличие embedding + `ai_quality_score` (в диапазоне `[0..100]`).
 
 Источник: [sync_profile_to_ranking.py](ranking_service/usecases/sync_profile_to_ranking.py)
 
@@ -65,3 +69,7 @@
 - boost + рядом: x3.6
 
 Источник: [adapters/rating/postgres/adapter.py](ranking_service/adapters/rating/postgres/adapter.py)
+
+### 7) Единый путь пересчета
+
+Batch-пересчет `recalculate_ratings` использует тот же `SyncProfileToRanking`, что и realtime-события (`profile.updated`, `photo.uploaded`, `ai.analysis.completed`), поэтому факторы L1/L2/L3 не теряются между потоками.
