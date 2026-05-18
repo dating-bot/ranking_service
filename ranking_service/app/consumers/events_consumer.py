@@ -7,6 +7,7 @@ import structlog
 import structlog.contextvars
 from aio_pika import ExchangeType
 
+from ranking_service.infra.tracing import attach_context_from_headers, current_trace_id
 from ranking_service.protocols.interaction_staging.repository import InteractionStagingRepositoryProtocol
 from ranking_service.usecases.sync_profile_to_ranking import SyncProfileToRanking
 
@@ -84,15 +85,20 @@ class EventsConsumer[SessionT]:
                     async with message.process(ignore_processed=True):
                         payload = json.loads(message.body)
                         telegram_id = int(payload["telegram_id"])
-                        trace_id = _extract_trace_id(message.headers)
-                        try:
-                            with structlog.contextvars.bound_contextvars(trace_id=trace_id):
-                                _ = await self._sync_profile_to_ranking.execute(
-                                    SyncProfileToRanking.Request(telegram_id=telegram_id, trace_id=trace_id)
+                        with attach_context_from_headers(message.headers):
+                            trace_id = _extract_trace_id(message.headers) or current_trace_id() or "mq-no-trace"
+                            try:
+                                with structlog.contextvars.bound_contextvars(trace_id=trace_id):
+                                    _ = await self._sync_profile_to_ranking.execute(
+                                        SyncProfileToRanking.Request(telegram_id=telegram_id, trace_id=trace_id)
+                                    )
+                                log.info("ranking profile sync event processed", queue=queue.name, telegram_id=telegram_id)
+                            except Exception:
+                                log.exception(
+                                    "ranking profile sync event failed",
+                                    queue=queue.name,
+                                    telegram_id=telegram_id,
                                 )
-                            log.info("ranking profile sync event processed", queue=queue.name, telegram_id=telegram_id)
-                        except Exception:
-                            log.exception("ranking profile sync event failed", queue=queue.name, telegram_id=telegram_id)
         except (asyncio.CancelledError, aio_pika.exceptions.ChannelInvalidStateError):
             log.info("profile events consumer stopped", queue=queue.name)
 
@@ -102,25 +108,26 @@ class EventsConsumer[SessionT]:
                 async for message in iterator:
                     async with message.process(ignore_processed=True):
                         payload = json.loads(message.body)
-                        trace_id = _extract_trace_id(message.headers)
-                        actor_id = int(payload.get("actor_telegram_id") or payload.get("liker_telegram_id"))
-                        target_id = int(payload.get("target_telegram_id") or payload.get("liked_telegram_id"))
-                        with structlog.contextvars.bound_contextvars(trace_id=trace_id):
-                            async with self._interaction_staging_repository.context() as session:
-                                if queue.name == RANKING_INTERACTION_UNDO_SKIP_QUEUE:
-                                    await self._interaction_staging_repository.delete_staging(
-                                        session,
-                                        actor_id,
-                                        target_id,
-                                    )
-                                else:
-                                    _ = await self._interaction_staging_repository.insert_staging(
-                                        session,
-                                        InteractionStagingRepositoryProtocol.InsertStagingRequest(
-                                            actor_telegram_id=actor_id,
-                                            target_telegram_id=target_id,
-                                        ),
-                                    )
+                        with attach_context_from_headers(message.headers):
+                            trace_id = _extract_trace_id(message.headers) or current_trace_id() or "mq-no-trace"
+                            actor_id = int(payload.get("actor_telegram_id") or payload.get("liker_telegram_id"))
+                            target_id = int(payload.get("target_telegram_id") or payload.get("liked_telegram_id"))
+                            with structlog.contextvars.bound_contextvars(trace_id=trace_id):
+                                async with self._interaction_staging_repository.context() as session:
+                                    if queue.name == RANKING_INTERACTION_UNDO_SKIP_QUEUE:
+                                        await self._interaction_staging_repository.delete_staging(
+                                            session,
+                                            actor_id,
+                                            target_id,
+                                        )
+                                    else:
+                                        _ = await self._interaction_staging_repository.insert_staging(
+                                            session,
+                                            InteractionStagingRepositoryProtocol.InsertStagingRequest(
+                                                actor_telegram_id=actor_id,
+                                                target_telegram_id=target_id,
+                                            ),
+                                        )
                         log.debug(
                             "ranking interaction staged", queue=queue.name, actor_id=actor_id, target_id=target_id
                         )
@@ -138,7 +145,10 @@ def _extract_trace_id(headers: dict[str, object] | None) -> str:
         return trace_id
     traceparent = headers.get("traceparent")
     if isinstance(traceparent, bytes):
-        return traceparent.decode("utf-8", errors="ignore")
+        traceparent = traceparent.decode("utf-8", errors="ignore")
     if isinstance(traceparent, str) and traceparent:
+        parts = traceparent.split("-")
+        if len(parts) >= 4 and len(parts[1]) == 32:
+            return parts[1]
         return traceparent
     return "mq-no-trace"

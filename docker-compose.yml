@@ -12,6 +12,10 @@ services:
     external_links:
       - dating_bot_valkey:valkey
       - dating_bot_rabbitmq:rabbitmq
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
+      OTEL_EXPORTER_OTLP_INSECURE: ${OTEL_EXPORTER_OTLP_INSECURE:-true}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-ranking-service}
     healthcheck:
       test: ["CMD", "grpc_health_probe", "-addr=:50051"]
       interval: 10s
@@ -59,6 +63,9 @@ services:
     restart: unless-stopped
     environment:
       - CELERY_BROKER_URL=redis://valkey:6379/0
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
+      - OTEL_EXPORTER_OTLP_INSECURE=${OTEL_EXPORTER_OTLP_INSECURE:-true}
+      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-ranking-service-celery}
 
 networks:
   dating_bot_net:

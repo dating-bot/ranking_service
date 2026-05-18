@@ -1,4 +1,10 @@
+import os
+
 from celery import Celery
+
+from ranking_service.infra.tracing import setup_tracing
+
+setup_tracing(service_name=os.getenv("OTEL_SERVICE_NAME", "ranking-service-celery"))
 
 celery_app = Celery(
     "ranking_service",

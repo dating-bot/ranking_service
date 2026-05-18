@@ -13,6 +13,7 @@ from external_clients.profile_api.v1.profile_pb2 import (
     GetPreferencesRequest,
     GetProfileRequest,
 )
+from ranking_service.infra.tracing import current_trace_id, inject_grpc_metadata
 from ranking_service.protocols import ProfileInsightsProtocol
 from ranking_service.protocols.rating.repository import RatingRepositoryProtocol
 from ranking_service.usecases.calc_combined.usecase import CalcCombinedScore
@@ -44,9 +45,8 @@ class SyncProfileToRanking[SessionT]:
         trace_id: str | None = None
 
     async def execute(self, request: Request) -> bool:
-        metadata = None
-        if request.trace_id:
-            metadata = [("trace_id", request.trace_id)]
+        trace_id = request.trace_id or current_trace_id()
+        metadata = inject_grpc_metadata([("trace_id", trace_id)] if trace_id else None)
 
         profile = await self._profile_stub.GetProfile(
             GetProfileRequest(telegram_id=request.telegram_id),

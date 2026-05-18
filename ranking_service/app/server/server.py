@@ -9,6 +9,7 @@ from ranking_service.app.consumers.events_consumer import EventsConsumer
 from ranking_service.app.server import di
 from ranking_service.app.server.grpc_handler import RankingServiceHandler
 from ranking_service.app.server.utils.logger import configure_logger
+from ranking_service.infra.tracing import setup_tracing
 
 log = structlog.stdlib.get_logger("ranking_service.server")
 
@@ -36,6 +37,7 @@ async def main() -> None:
         json_mode=False,
         log_level="DEBUG" if config.debug else "INFO",
     )
+    setup_tracing(service_name="ranking-service")
     log.info("Starting ranking-service")
 
     grpc_handler_instance = await di.container.get(RankingServiceHandler)
